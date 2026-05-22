@@ -17,6 +17,13 @@ from bxengine.exceptions import BxeRuntimeException
 from conftest import run_program, run_program_raw
 
 
+class AliasExtension(BxeStatelessExtension):
+    @staticmethod
+    @bpp_function(name="ALIASBASE", aliases=["AB", "alias_base"])
+    def alias_target() -> str:
+        return "alias-ok"
+
+
 # =====================================================================
 # Outer text
 # =====================================================================
@@ -383,6 +390,18 @@ class TestExtensions:
     def test_node_transformer_extension(self):
         exts = [BuiltinExtension(), MyBxeExtension()]
         assert run_program("[test_nodetransform]", extensions=exts) == "1"
+
+    def test_function_alias_primary_name(self):
+        exts = [BuiltinExtension(), AliasExtension()]
+        assert run_program("[ALIASBASE]", extensions=exts) == "alias-ok"
+
+    def test_function_alias_short_alias(self):
+        exts = [BuiltinExtension(), AliasExtension()]
+        assert run_program("[AB]", extensions=exts) == "alias-ok"
+
+    def test_function_alias_case_insensitive_alias(self):
+        exts = [BuiltinExtension(), AliasExtension()]
+        assert run_program("[alias_base]", extensions=exts) == "alias-ok"
 
     def test_global_variable_extension(self):
         assert (

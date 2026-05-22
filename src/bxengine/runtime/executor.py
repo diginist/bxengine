@@ -80,6 +80,9 @@ def _scan_extension(ext: BxeExtensionBase) -> list[tuple[str, FunctionEntry]]:
             continue
         if callable(attr) and getattr(attr, "_is_bpp_function", False):
             name = getattr(attr, "_bpp_function_name", attr_name).upper()
+            aliases = tuple(
+                str(alias).upper() for alias in getattr(attr, "_bpp_function_aliases", ())
+            )
             is_node_transformer = getattr(attr, "_node_transformer", False)
             sig = inspect.signature(attr)
             parameters = list(sig.parameters.values())
@@ -96,22 +99,24 @@ def _scan_extension(ext: BxeExtensionBase) -> list[tuple[str, FunctionEntry]]:
                 (i for i, p in enumerate(parameters) if p.name == "context"),
                 None,
             )
-            entries.append(
-                (
-                    name,
-                    FunctionEntry(
-                        func=attr,
-                        is_node_transformer=is_node_transformer,
-                        extension_instance=ext,
-                        parameter_annotations=parameter_annotations,
-                        coercion_annotations=coercion_annotations,
-                        context_parameter_index=context_parameter_index,
-                        node_transformer_accepts_context=(
-                            is_node_transformer and context_parameter_index is not None
-                        ),
-                    ),
-                )
+            entry = FunctionEntry(
+                func=attr,
+                is_node_transformer=is_node_transformer,
+                extension_instance=ext,
+                parameter_annotations=parameter_annotations,
+                coercion_annotations=coercion_annotations,
+                context_parameter_index=context_parameter_index,
+                node_transformer_accepts_context=(
+                    is_node_transformer and context_parameter_index is not None
+                ),
             )
+            # Register primary function name plus optional aliases.
+            seen_names = set()
+            for resolved_name in (name, *aliases):
+                if resolved_name in seen_names:
+                    continue
+                seen_names.add(resolved_name)
+                entries.append((resolved_name, entry))
     return entries
 
 

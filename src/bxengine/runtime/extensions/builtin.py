@@ -581,6 +581,11 @@ class BuiltinExtension(BxeStatelessExtension):
         return time.time()
 
     @staticmethod
-    @bpp_function(name="#")
-    def COMMENT(*_args: Any) -> str:
+    @bpp_function(name="#", aliases=["VOID"])
+    def VOID(*_args: Any) -> str:
+        return ""
+
+    @staticmethod
+    @bpp_function(name="//", node_transformer=True)
+    def COMMENT(nodes: list[Node], span: SpanData, context: RuntimeContext) -> Any:
         return ""

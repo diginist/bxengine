@@ -6,14 +6,26 @@ from bxengine.parsing.nodes import Node, Nodes
 from bxengine.spans import SpanData
 
 
-def bpp_function(name: str | None = None, node_transformer: bool = False):
+def bpp_function(
+    name: str | None = None,
+    node_transformer: bool = False,
+    aliases: list[str] | tuple[str, ...] | str | None = None,
+):
     """
     Annotates a function as available in the runtime.
     """
+    if aliases is None:
+        alias_tuple: tuple[str, ...] = ()
+    elif isinstance(aliases, str):
+        alias_tuple = (aliases,)
+    else:
+        alias_tuple = tuple(str(a) for a in aliases if str(a) != "")
+
     def decorator(func: Callable) -> Callable:
         func._is_bpp_function = True
         func._node_transformer = node_transformer
         func._bpp_function_name = name if name is not None else func.__name__
+        func._bpp_function_aliases = alias_tuple
         return func
     return decorator
 
