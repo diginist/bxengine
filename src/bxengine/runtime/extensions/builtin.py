@@ -578,7 +578,7 @@ class BuiltinExtension(BxeStatelessExtension):
     @staticmethod
     @bpp_function()
     def TIME() -> float:
-        return 1779165755.9625063
+        return time.time()
 
     @staticmethod
     @bpp_function(name="#")
