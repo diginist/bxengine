@@ -13,3 +13,4 @@ class RuntimeContext:
     program_args: list[Any] = field(default_factory=list)
     executor: Executor | None = None
     functions: dict[str, FunctionEntry] = field(default_factory=dict)
+    last_exception: Exception | None = None

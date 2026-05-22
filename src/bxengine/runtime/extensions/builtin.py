@@ -4,8 +4,9 @@ import re
 import time
 from typing import Any
 
+
 from bxengine.exceptions import BxeRuntimeException, BxeRuntimeSyntaxException
-from bxengine.parsing.nodes import Node, Nodes
+from bxengine.parsing.nodes import Node
 from bxengine.runtime.context import RuntimeContext
 from bxengine.runtime.extensions.BxeExtension import (
     BxeStatelessExtension,
@@ -68,6 +69,34 @@ class BuiltinExtension(BxeStatelessExtension):
         if len(nodes) > 2:
             return context.executor.evaluate_node(nodes[2], context)
         return ""
+
+    @staticmethod
+    @bpp_function(node_transformer=True)
+    def TRY(nodes: list[Node], span: SpanData, context: RuntimeContext):
+        if len(nodes) != 2:
+            raise BxeRuntimeSyntaxException("TRY expected 2 parameters")
+        try:
+            return context.executor.evaluate_node(nodes[0], context)
+        except Exception as exc:
+            previous_exception = context.last_exception
+            context.last_exception = exc
+            return context.executor.evaluate_node(nodes[1], context)
+            context.last_exception = previous_exception
+
+    @staticmethod
+    @bpp_function()
+    def EXCEPTION(detail: str, context: RuntimeContext):
+        if context.last_exception is None:
+            raise BxeRuntimeException("Cannot get the exception outside a TRY block")
+        match detail.lower():
+            case "type":
+                return type(context.last_exception).__name__
+            case "detail":
+                return str(context.last_exception)
+            case _:
+                raise BxeRuntimeSyntaxException(f"Unknown exception info parameter {detail}")
+
+
 
     @staticmethod
     @bpp_function()
