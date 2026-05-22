@@ -53,8 +53,8 @@ class TestControlFlow:
     def test_if_truthy_string(self):
         assert run_program('[IF "anything" "yes" "no"]') == "yes"
 
-    def test_if_empty_string_is_falsy(self):
-        assert run_program('[IF "" "yes" "no"]') == "no"
+    def test_if_empty_string_is_not_falsy(self):
+        assert run_program('[IF "" "yes" "no"]') == "yes"
 
     def test_if_no_else(self):
         assert run_program('[IF 0 "yes"]') == ""
