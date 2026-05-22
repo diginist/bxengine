@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=69.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bxengine"
+dynamic = ["version"]
+description = "B++ runtime engine"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Interpreters",
+    "Typing :: Typed",
+]
+
+[project.scripts]
+bxengine = "bxengine.module:_module_main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["bxengine*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "bxengine.__version__"}
+
+[dependency-groups]
+dev = [
+    "build>=1.2.2",
+    "pytest>=9.0.3",
+    "twine>=6.1.0",
+]

@@ -1,0 +1,9 @@
+tests/bpp_tags
+tests/compat/*.log
+.idea
+*.egg-info
+.venv
+__pycache__/
+*.py[cod]
+build/
+dist/
