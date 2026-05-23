@@ -8,7 +8,9 @@ import signal
 import traceback
 import time
 import copy
+from contextlib import contextmanager
 from typing import Any
+from unittest.mock import patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 COMPAT_DIR = os.path.join(ROOT, "tests", "compat")
@@ -45,10 +47,21 @@ USERID = 230873196247777280
 CHANNEL_ID = 481534942279630856
 SEED = 42
 TIMEOUT = 3
+FIXED_UNIX_TIME = 1779165755.9625063
 
 
 class TimeoutError(Exception):
     pass
+
+
+@contextmanager
+def _with_fixed_test_time():
+    # Keep compat runs deterministic for clock-dependent tags.
+    with (
+        patch("time.time", return_value=FIXED_UNIX_TIME),
+        patch.object(_bpp_parsing_module, "timenow", new=lambda: FIXED_UNIX_TIME),
+    ):
+        yield
 
 
 def _load_initial_globals() -> tuple[dict[str, tuple[str, int, str]], dict[str, Any]]:
@@ -246,16 +259,17 @@ def run_old(code):
     random.seed(SEED)
     start = time.perf_counter()
     try:
-        TrackingDatabase.last_instance = None
-        result = run_bpp_program(code, [], str(USERID), MockRunner(), MockChannel())
-        db_after = TrackingDatabase.last_instance
-        old_globals = (
-            _decode_stored_globals(db_after._variables) if db_after is not None else {}
-        )
-        output = result[0]
-        if isinstance(output, Exception):
-            return (None, f"{type(output).__name__}: {output}", old_globals, {"total": time.perf_counter() - start})
-        return (str(output), None, old_globals, {"total": time.perf_counter() - start})
+        with _with_fixed_test_time():
+            TrackingDatabase.last_instance = None
+            result = run_bpp_program(code, [], str(USERID), MockRunner(), MockChannel())
+            db_after = TrackingDatabase.last_instance
+            old_globals = (
+                _decode_stored_globals(db_after._variables) if db_after is not None else {}
+            )
+            output = result[0]
+            if isinstance(output, Exception):
+                return (None, f"{type(output).__name__}: {output}", old_globals, {"total": time.perf_counter() - start})
+            return (str(output), None, old_globals, {"total": time.perf_counter() - start})
     except TimeoutError:
         raise
     except Exception as e:
@@ -266,60 +280,61 @@ def run_new(code):
     random.seed(SEED)
     t0 = time.perf_counter()
     try:
-        t_token_start = time.perf_counter()
-        tok = Tokenizer.tokenize(code)
-        t_token_end = time.perf_counter()
-        if isinstance(tok, TokenizationResult.Error):
-            return (None, _format_error_with_span("TokenizeError", tok.message, tok.range), {}, {
-                "total": time.perf_counter() - t0,
-                "tokenize": t_token_end - t_token_start,
-                "parse": 0.0,
-                "execute": 0.0,
-            })
-        t_parse_start = time.perf_counter()
-        par = Parser.parse(code, tok.tokens)
-        t_parse_end = time.perf_counter()
-        if isinstance(par, ParsingResult.Error):
-            return (None, _format_error_with_span("ParseError", par.message, par.range), {}, {
-                "total": time.perf_counter() - t0,
-                "tokenize": t_token_end - t_token_start,
-                "parse": t_parse_end - t_parse_start,
-                "execute": 0.0,
-            })
-        exe = Executor(
-            extensions=[BuiltinExtension()],
-            stateful_extensions=[TestGlobalExtension, TestDiscordExtension],
-        )
-        t_exec_start = time.perf_counter()
-        result = exe.execute(par.nodes)
-        t_exec_end = time.perf_counter()
-        if isinstance(result, ExecutorResult.Error):
-            span = getattr(result.exception, "span", None)
-            return (None, _format_error_with_span(type(result.exception).__name__, str(result.exception), span), {}, {
+        with _with_fixed_test_time():
+            t_token_start = time.perf_counter()
+            tok = Tokenizer.tokenize(code)
+            t_token_end = time.perf_counter()
+            if isinstance(tok, TokenizationResult.Error):
+                return (None, _format_error_with_span("TokenizeError", tok.message, tok.range), {}, {
+                    "total": time.perf_counter() - t0,
+                    "tokenize": t_token_end - t_token_start,
+                    "parse": 0.0,
+                    "execute": 0.0,
+                })
+            t_parse_start = time.perf_counter()
+            par = Parser.parse(code, tok.tokens)
+            t_parse_end = time.perf_counter()
+            if isinstance(par, ParsingResult.Error):
+                return (None, _format_error_with_span("ParseError", par.message, par.range), {}, {
+                    "total": time.perf_counter() - t0,
+                    "tokenize": t_token_end - t_token_start,
+                    "parse": t_parse_end - t_parse_start,
+                    "execute": 0.0,
+                })
+            exe = Executor(
+                extensions=[BuiltinExtension()],
+                stateful_extensions=[TestGlobalExtension, TestDiscordExtension],
+            )
+            t_exec_start = time.perf_counter()
+            result = exe.execute(par.nodes)
+            t_exec_end = time.perf_counter()
+            if isinstance(result, ExecutorResult.Error):
+                span = getattr(result.exception, "span", None)
+                return (None, _format_error_with_span(type(result.exception).__name__, str(result.exception), span), {}, {
+                    "total": time.perf_counter() - t0,
+                    "tokenize": t_token_end - t_token_start,
+                    "parse": t_parse_end - t_parse_start,
+                    "execute": t_exec_end - t_exec_start,
+                })
+            global_ext = next(
+                (
+                    ext
+                    for ext in result.stateful_extensions
+                    if isinstance(ext, TestGlobalExtension)
+                ),
+                None,
+            )
+            new_globals = (
+                _canonicalize_new_globals(global_ext.global_variables)
+                if global_ext is not None
+                else {}
+            )
+            return (result.output, None, new_globals, {
                 "total": time.perf_counter() - t0,
                 "tokenize": t_token_end - t_token_start,
                 "parse": t_parse_end - t_parse_start,
                 "execute": t_exec_end - t_exec_start,
             })
-        global_ext = next(
-            (
-                ext
-                for ext in result.stateful_extensions
-                if isinstance(ext, TestGlobalExtension)
-            ),
-            None,
-        )
-        new_globals = (
-            _canonicalize_new_globals(global_ext.global_variables)
-            if global_ext is not None
-            else {}
-        )
-        return (result.output, None, new_globals, {
-            "total": time.perf_counter() - t0,
-            "tokenize": t_token_end - t_token_start,
-            "parse": t_parse_end - t_parse_start,
-            "execute": t_exec_end - t_exec_start,
-        })
     except TimeoutError:
         raise
     except Exception as e:
