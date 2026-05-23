@@ -172,6 +172,7 @@ class BuiltinExtension(BxeStatelessExtension):
 
         parameter_specs: list[MacroParameterSpec] = []
         supports_varargs = False
+        saw_optional_parameter = False
         for index, raw_name in enumerate(parameter_values):
             if not isinstance(raw_name, str):
                 raise TypeError(
@@ -188,6 +189,12 @@ class BuiltinExtension(BxeStatelessExtension):
 
             optional = raw_name.endswith("?")
             parameter_name = raw_name[:-1] if optional else raw_name
+            if saw_optional_parameter and not optional:
+                raise BxeRuntimeSyntaxException(
+                    "MACRO optional parameters must come after all required parameters"
+                )
+            if optional:
+                saw_optional_parameter = True
             _validate_variable_name(parameter_name)
             parameter_specs.append(MacroParameterSpec(name=parameter_name, optional=optional))
 
