@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional, get_origin, get_args, Union
 
 from bxengine.exceptions import BxeRuntimeException
 from bxengine.parsing.nodes import Node, Nodes
-from bxengine.runtime.context import RuntimeContext
+from bxengine.runtime.context import RuntimeContext, MacroInvocationFrame
 from bxengine.runtime.extensions.BxeExtension import (
     BxeExtensionBase,
     BxeStatefulExtension,
@@ -178,6 +178,9 @@ class Executor:
         try:
             func_name = node.name.upper()
 
+            if func_name.startswith("@") and func_name in context.macros:
+                return self._evaluate_macro_call(func_name, node, context)
+
             entry = context.functions.get(func_name)
 
             if entry is None:
@@ -197,6 +200,51 @@ class Executor:
         except Exception as e:
             self._attach_span_if_missing(e, node.range)
             raise
+
+    def _evaluate_macro_call(
+        self, macro_name: str, node: Nodes.Function, context: RuntimeContext
+    ) -> Any:
+        macro = context.macros[macro_name]
+
+        if macro_name in context.macro_call_stack:
+            cycle = " -> ".join((*context.macro_call_stack, macro_name))
+            raise BxeRuntimeException(f"Macro recursion detected: {cycle}")
+
+        evaluated_args = [self._evaluate_node(arg, context) for arg in node.arguments]
+        required_args = sum(1 for p in macro.parameters if not p.optional)
+        max_args = None if macro.supports_varargs else len(macro.parameters)
+
+        if len(evaluated_args) < required_args:
+            raise TypeError(
+                f"{macro.call_name} expected at least {required_args} parameters, "
+                f"but got {len(evaluated_args)}"
+            )
+        if max_args is not None and len(evaluated_args) > max_args:
+            raise TypeError(
+                f"{macro.call_name} expected at most {max_args} parameters, "
+                f"but got {len(evaluated_args)}"
+            )
+
+        param_scope: dict[str, Any] = {}
+        for index, param in enumerate(macro.parameters):
+            if index < len(evaluated_args):
+                param_scope[param.name] = evaluated_args[index]
+            else:
+                # Optional parameters default to empty string when omitted.
+                param_scope[param.name] = ""
+
+        context.macro_call_stack.append(macro_name)
+        context.macro_param_stack.append(
+            MacroInvocationFrame(
+                parameter_values=param_scope,
+                all_arguments=tuple(evaluated_args),
+            )
+        )
+        try:
+            return self._evaluate_node(macro.body, context)
+        finally:
+            context.macro_param_stack.pop()
+            context.macro_call_stack.pop()
 
     def _evaluate_node(self, node: Node, context: RuntimeContext) -> Any:
         if isinstance(node, Nodes.Function):

@@ -5,9 +5,12 @@ import time
 from typing import Any
 
 
-from bxengine.exceptions import BxeRuntimeException, BxeRuntimeSyntaxException
-from bxengine.parsing.nodes import Node
-from bxengine.runtime.context import RuntimeContext
+from bxengine.exceptions import (
+    BxeRuntimeException,
+    BxeRuntimeSyntaxException,
+)
+from bxengine.parsing.nodes import Node, Nodes
+from bxengine.runtime.context import RuntimeContext, MacroDefinition, MacroParameterSpec
 from bxengine.runtime.extensions.BxeExtension import (
     BxeStatelessExtension,
     bpp_function,
@@ -83,6 +86,86 @@ class BuiltinExtension(BxeStatelessExtension):
             ret = context.executor.evaluate_node(nodes[1], context)
             context.last_exception = previous_exception
             return ret
+
+    @staticmethod
+    def _normalize_macro_call_name(name: Any) -> str:
+        if not isinstance(name, str):
+            raise NameError(f"Macro name must be a string: {_safe_cut(name)}")
+        stripped = name.strip()
+        if stripped == "":
+            raise NameError("Macro name cannot be empty")
+        if stripped.startswith("@"):
+            stripped = stripped[1:]
+        return f"@{stripped.upper()}"
+
+    @staticmethod
+    @bpp_function(node_transformer=True)
+    def MACRO(nodes: list[Node], span: SpanData, context: RuntimeContext) -> str:
+        if len(nodes) != 3:
+            raise BxeRuntimeSyntaxException("MACRO expected 3 parameters")
+
+        macro_name_value = context.executor.evaluate_node(nodes[0], context)
+        macro_call_name = BuiltinExtension._normalize_macro_call_name(macro_name_value)
+
+        parameter_values = context.executor.evaluate_node(nodes[1], context)
+        if not isinstance(parameter_values, list):
+            raise TypeError(
+                f"Second parameter of MACRO function must be an array: {_safe_cut(parameter_values)}"
+            )
+
+        parameter_specs: list[MacroParameterSpec] = []
+        supports_varargs = False
+        for index, raw_name in enumerate(parameter_values):
+            if not isinstance(raw_name, str):
+                raise TypeError(
+                    f"Macro parameter name must be a string: {_safe_cut(raw_name)}"
+                )
+
+            if raw_name == "...":
+                if supports_varargs:
+                    raise BxeRuntimeSyntaxException("MACRO can only declare varargs once")
+                if index != len(parameter_values) - 1:
+                    raise BxeRuntimeSyntaxException("MACRO varargs (...) must be the last parameter")
+                supports_varargs = True
+                continue
+
+            optional = raw_name.endswith("?")
+            parameter_name = raw_name[:-1] if optional else raw_name
+            _validate_variable_name(parameter_name)
+            parameter_specs.append(MacroParameterSpec(name=parameter_name, optional=optional))
+
+        context.macros[macro_call_name] = MacroDefinition(
+            call_name=macro_call_name,
+            parameters=tuple(parameter_specs),
+            supports_varargs=supports_varargs,
+            body=nodes[2],
+        )
+        return ""
+
+    @staticmethod
+    @bpp_function(node_transformer=True)
+    def PARAM(nodes: list[Node], span: SpanData, context: RuntimeContext) -> Any:
+        if len(nodes) != 1:
+            raise BxeRuntimeSyntaxException("PARAM expected 1 parameter")
+        if not context.macro_param_stack:
+            raise BxeRuntimeException("PARAM can only be used inside a macro")
+
+        raw_name = context.executor.evaluate_node(nodes[0], context)
+        if not isinstance(raw_name, str):
+            raise TypeError(f"PARAM name must be a string: {_safe_cut(raw_name)}")
+        _validate_variable_name(raw_name)
+
+        frame = context.macro_param_stack[-1]
+        if raw_name not in frame.parameter_values:
+            raise NameError(f"No macro parameter named {_safe_cut(raw_name)}")
+        return frame.parameter_values[raw_name]
+
+    @staticmethod
+    @bpp_function()
+    def PARAMS(context: RuntimeContext) -> list[Any]:
+        if not context.macro_param_stack:
+            raise BxeRuntimeException("PARAMS can only be used inside a macro")
+        return list(context.macro_param_stack[-1].all_arguments)
 
     @staticmethod
     @bpp_function()
