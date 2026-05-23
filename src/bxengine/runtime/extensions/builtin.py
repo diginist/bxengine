@@ -256,6 +256,15 @@ class BuiltinExtension(BxeStatelessExtension):
             return ""
         return context.program_args[idx]
 
+    @staticmethod
+    @bpp_function()
+    def SETARGS(*args: Any, context: RuntimeContext) -> str:
+        if len(args) == 1 and isinstance(args[0], list):
+            context.program_args = list(args[0])
+        else:
+            context.program_args = list(args)
+        return ""
+
     # ========================= Math =========================
 
     @staticmethod

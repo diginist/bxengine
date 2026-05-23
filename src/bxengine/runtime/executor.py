@@ -23,6 +23,7 @@ class FunctionEntry:
     parameter_annotations: tuple[Any, ...]
     coercion_annotations: tuple[Any | None, ...]
     context_parameter_index: int | None
+    context_parameter_kind: inspect._ParameterKind | None
     node_transformer_accepts_context: bool
 
 
@@ -99,6 +100,11 @@ def _scan_extension(ext: BxeExtensionBase) -> list[tuple[str, FunctionEntry]]:
                 (i for i, p in enumerate(parameters) if p.name == "context"),
                 None,
             )
+            context_parameter_kind = (
+                parameters[context_parameter_index].kind
+                if context_parameter_index is not None
+                else None
+            )
             entry = FunctionEntry(
                 func=attr,
                 is_node_transformer=is_node_transformer,
@@ -106,6 +112,7 @@ def _scan_extension(ext: BxeExtensionBase) -> list[tuple[str, FunctionEntry]]:
                 parameter_annotations=parameter_annotations,
                 coercion_annotations=coercion_annotations,
                 context_parameter_index=context_parameter_index,
+                context_parameter_kind=context_parameter_kind,
                 node_transformer_accepts_context=(
                     is_node_transformer and context_parameter_index is not None
                 ),
@@ -335,10 +342,14 @@ class Executor:
         entry: FunctionEntry, args: list[Any], context: RuntimeContext
     ) -> tuple[list[Any], dict[str, Any]]:
         context_idx = entry.context_parameter_index
-        if context_idx is not None:
-            if len(args) <= context_idx:
-                return args, {"context": context}
+        if context_idx is None:
             return args, {}
+
+        if entry.context_parameter_kind is inspect.Parameter.KEYWORD_ONLY:
+            return args, {"context": context}
+
+        if len(args) <= context_idx:
+            return args, {"context": context}
         return args, {}
 
     @staticmethod
