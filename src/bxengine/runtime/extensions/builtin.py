@@ -80,8 +80,9 @@ class BuiltinExtension(BxeStatelessExtension):
         except Exception as exc:
             previous_exception = context.last_exception
             context.last_exception = exc
-            return context.executor.evaluate_node(nodes[1], context)
+            ret = context.executor.evaluate_node(nodes[1], context)
             context.last_exception = previous_exception
+            return ret
 
     @staticmethod
     @bpp_function()
