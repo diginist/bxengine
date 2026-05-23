@@ -1,0 +1,37 @@
+from bxengine.runtime.executor import ExecutorResult
+
+from conftest import run_program, run_program_raw
+
+
+class TestVariables:
+    def test_define_and_var(self):
+        assert run_program('[DEFINE x 42] [VAR x]') == " 42"
+
+    def test_define_string(self):
+        assert run_program('[DEFINE name "Alice"] [VAR name]') == " Alice"
+
+    def test_var_undefined_raises(self):
+        res = run_program_raw("[VAR nonexistent]")
+        assert isinstance(res, ExecutorResult.Error)
+        assert isinstance(res.exception, NameError)
+
+    def test_define_invalid_name(self):
+        res = run_program_raw('[DEFINE "123bad" 1]')
+        assert isinstance(res, ExecutorResult.Error)
+
+    def test_define_overwrite(self):
+        assert run_program('[DEFINE x 1] [DEFINE x 2] [VAR x]') == "  2"
+
+
+class TestArgs:
+    def test_args_by_index(self):
+        assert run_program("[ARGS 0] [ARGS 1]", program_args=["hello", "world"]) == "hello world"
+
+    def test_args_all(self):
+        assert run_program("[ARGS]", program_args=["a", "b", "c"]) == '[ARRAY "a" "b" "c"]'
+
+    def test_args_out_of_range(self):
+        assert run_program("[ARGS 5]", program_args=["only-one"]) == ""
+
+    def test_args_no_args(self):
+        assert run_program("[ARGS]") == "[ARRAY ]"
