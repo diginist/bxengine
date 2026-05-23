@@ -70,3 +70,13 @@ class TestMacros:
         res = run_program_raw('[MACRO noextra [ARRAY "x"] [PARAM x]] [@noextra 1 2]')
         assert isinstance(res, ExecutorResult.Error)
         assert isinstance(res.exception, TypeError)
+
+    def test_macro_name_with_space_is_rejected(self):
+        res = run_program_raw('[MACRO "bad name" [ARRAY] "x"]')
+        assert isinstance(res, ExecutorResult.Error)
+        assert isinstance(res.exception, NameError)
+
+    def test_macro_name_with_unreachable_chars_is_rejected(self):
+        res = run_program_raw('[MACRO "bad]name" [ARRAY] "x"]')
+        assert isinstance(res, ExecutorResult.Error)
+        assert isinstance(res.exception, NameError)

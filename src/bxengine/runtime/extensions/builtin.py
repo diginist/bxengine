@@ -57,6 +57,18 @@ def _validate_variable_name(name: str) -> None:
         )
 
 
+def _validate_macro_name(name: str) -> None:
+    if not isinstance(name, str):
+        raise NameError(f"Macro name must be a string: {_safe_cut(name)}")
+    if name == "":
+        raise NameError("Macro name cannot be empty")
+    if re.search(r'[\\\s\[\]"“”]', name):
+        raise NameError(
+            "Macro name cannot contain spaces, brackets, quotes, or backslashes: "
+            f"{_safe_cut(name)}"
+        )
+
+
 class BuiltinExtension(BxeStatelessExtension):
 
     # ========================= Control Flow =========================
@@ -140,6 +152,7 @@ class BuiltinExtension(BxeStatelessExtension):
             raise NameError("Macro name cannot be empty")
         if stripped.startswith("@"):
             stripped = stripped[1:]
+        _validate_macro_name(stripped)
         return f"@{stripped.upper()}"
 
     @staticmethod
