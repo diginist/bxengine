@@ -18,6 +18,7 @@ from bxengine.runtime.extensions.BxeExtension import (
 from bxengine.spans import SpanData
 
 _ITERATION_LIMIT = 1024
+_LOOP_ITERATION_CAP = 1024
 _MULTIPLY_LIMIT = 1e50
 
 
@@ -86,6 +87,49 @@ class BuiltinExtension(BxeStatelessExtension):
             ret = context.executor.evaluate_node(nodes[1], context)
             context.last_exception = previous_exception
             return ret
+
+    @staticmethod
+    def _consume_loop_budget(context: RuntimeContext, amount: int) -> None:
+        if amount <= 0:
+            return
+        projected = context.loop_iterations_used + amount
+        if projected > _LOOP_ITERATION_CAP:
+            raise BxeRuntimeException(
+                f"LOOP iteration cap exceeded: attempted {projected} iterations "
+                f"(limit {_LOOP_ITERATION_CAP})"
+            )
+        context.loop_iterations_used = projected
+
+    @staticmethod
+    @bpp_function(node_transformer=True)
+    def LOOP(nodes: list[Node], span: SpanData, context: RuntimeContext) -> str:
+        if len(nodes) != 2:
+            raise BxeRuntimeSyntaxException("LOOP expected 2 parameters")
+
+        count_raw = context.executor.evaluate_node(nodes[0], context)
+        if not _is_whole(count_raw):
+            raise ValueError(f"First parameter of LOOP function must be an integer: {_safe_cut(count_raw)}")
+        count = int(count_raw)
+        if count < 0:
+            raise ValueError(f"First parameter of LOOP function cannot be negative: {_safe_cut(count_raw)}")
+        if count == 0:
+            return ""
+
+        body_node = nodes[1]
+        is_direct_nested_loop = (
+            isinstance(body_node, Nodes.Function)
+            and body_node.name.upper() == "LOOP"
+        )
+
+        out: list[str] = []
+        for _ in range(count):
+            # Count effective loop work once for non-nested bodies.
+            # Direct nested LOOPs consume from the shared cap inside the inner LOOP.
+            if not is_direct_nested_loop:
+                BuiltinExtension._consume_loop_budget(context, 1)
+            value = context.executor.evaluate_node(body_node, context)
+            out.append(context.executor._format_result(value))
+        return "".join(out)
 
     @staticmethod
     def _normalize_macro_call_name(name: Any) -> str:

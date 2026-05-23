@@ -1,4 +1,5 @@
 from bxengine.runtime.executor import ExecutorResult
+from bxengine.exceptions import BxeRuntimeException
 
 from conftest import run_program, run_program_raw
 
@@ -84,3 +85,35 @@ class TestControlFlow:
 
     def test_nested_if(self):
         assert run_program('[IF [COMPARE 5 ">" 3] "bigger" "smaller"]') == "bigger"
+
+    def test_loop_basic(self):
+        assert run_program('[LOOP 3 "x"]') == "xxx"
+
+    def test_loop_zero(self):
+        assert run_program('[LOOP 0 "x"]') == ""
+
+    def test_loop_cap(self):
+        res = run_program_raw('[LOOP 1025 "x"]')
+        assert isinstance(res, ExecutorResult.Error)
+        assert isinstance(res.exception, BxeRuntimeException)
+        assert "cap" in str(res.exception).lower()
+
+    def test_loop_requires_integer_count(self):
+        res = run_program_raw('[LOOP 2.5 "x"]')
+        assert isinstance(res, ExecutorResult.Error)
+        assert isinstance(res.exception, ValueError)
+
+    def test_loop_negative_rejected(self):
+        res = run_program_raw('[LOOP -1 "x"]')
+        assert isinstance(res, ExecutorResult.Error)
+        assert isinstance(res.exception, ValueError)
+
+    def test_loop_nested_counts_against_shared_cap(self):
+        out = run_program('[LOOP 4 [LOOP 4 "x"]]')
+        assert out == "x" * 16
+
+    def test_loop_shared_cap_across_nested_loops(self):
+        res = run_program_raw('[LOOP 33 [LOOP 33 "x"]]')
+        assert isinstance(res, ExecutorResult.Error)
+        assert isinstance(res.exception, BxeRuntimeException)
+        assert "cap" in str(res.exception).lower()
