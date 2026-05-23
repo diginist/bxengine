@@ -709,7 +709,10 @@ class BuiltinExtension(BxeStatelessExtension):
                 f"Optional fourth parameter of SLICE function cannot be 0: {_safe_cut(d)}"
             )
         to_cut = a if isinstance(a, list) else str(a)
-        return to_cut[int(b) : int(c) : (int(d) if d else 1)]
+        start = int(b) if b is not None else None
+        end = int(c) if c is not None else None
+        step = int(d) if d is not None else None
+        return to_cut[start:end:step]
 
     @staticmethod
     @bpp_function()

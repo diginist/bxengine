@@ -58,6 +58,12 @@ class TestArray:
     def test_slice_array(self):
         assert run_program("[SLICE [ARRAY a b c d] 1 3]") == '[ARRAY "b" "c"]'
 
+    def test_slice_array_with_only_start(self):
+        assert run_program("[SLICE [ARRAY a b] 1]") == '[ARRAY "b"]'
+
+    def test_slice_with_only_source_returns_copy(self):
+        assert run_program("[SLICE [ARRAY a b]]") == '[ARRAY "a" "b"]'
+
     def test_shuffle(self):
         result = run_program("[SHUFFLE [ARRAY 1 2 3]]")
         assert "ARRAY" in result
