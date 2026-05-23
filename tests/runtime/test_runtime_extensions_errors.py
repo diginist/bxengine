@@ -17,6 +17,14 @@ class AliasExtension(BxeStatelessExtension):
         return "alias-ok"
 
 
+class KeywordOnlyContextExtension(BxeStatelessExtension):
+    @staticmethod
+    @bpp_function()
+    def ctxarg_count(*args, context) -> int:
+        context.local_variables["_ctx_seen"] = True
+        return len(args)
+
+
 class TestExtensions:
     def test_stateless_extension(self):
         exts = [BuiltinExtension(), MyBxeExtension()]
@@ -49,6 +57,10 @@ class TestExtensions:
     def test_function_alias_case_insensitive_alias(self):
         exts = [BuiltinExtension(), AliasExtension()]
         assert run_program("[alias_base]", extensions=exts) == "alias-ok"
+
+    def test_keyword_only_context_injection_with_variadic_args(self):
+        exts = [BuiltinExtension(), KeywordOnlyContextExtension()]
+        assert run_program("[ctxarg_count a b c]", extensions=exts) == "3"
 
     def test_global_variable_extension(self):
         assert (

@@ -35,3 +35,19 @@ class TestArgs:
 
     def test_args_no_args(self):
         assert run_program("[ARGS]") == "[ARRAY ]"
+
+    def test_setargs_from_array(self):
+        out = run_program('[SETARGS [ARRAY "hello" "world"]] [ARGS 0] [ARGS 1]')
+        assert out == " hello world"
+
+    def test_setargs_variadic(self):
+        out = run_program("[SETARGS hello world] [ARGS]")
+        assert out == ' [ARRAY "hello" "world"]'
+
+    def test_setargs_overrides_initial_program_args(self):
+        out = run_program("[SETARGS fresh] [ARGS 0]", program_args=["old"])
+        assert out == " fresh"
+
+    def test_setargs_empty_clears_program_args(self):
+        out = run_program("[SETARGS] [ARGS]")
+        assert out == " [ARRAY ]"
